@@ -1,4 +1,26 @@
-import { toggleFormElements, getGenitiveForm } from './utils.js';
+import { getGenitiveForm } from './utils.js';
+import { setDefaultAddress, resetMap, resetMainPinMarker } from './map.js';
+import { sendData } from './api.js';
+
+const adForm = document.querySelector('.ad-form');
+const titleInput = adForm.querySelector('#title');
+const typeInput = adForm.querySelector('#type');
+const priceInput = adForm.querySelector('#price');
+const priceSlider = adForm.querySelector('.ad-form__slider');
+const roomsInput = adForm.querySelector('#room_number');
+const capacityInput = adForm.querySelector('#capacity');
+const timeSelectsGroup = adForm.querySelector('.ad-form__element--time');
+const timeSelects = timeSelectsGroup.querySelectorAll('select');
+const submitBtn = adForm.querySelector('.ad-form__submit');
+const resetBtn = adForm.querySelector('.ad-form__reset');
+
+const successSubmitMessage = document.querySelector('#success')
+  .content
+  .querySelector('.success');
+
+const errorSubmitMessage = document.querySelector('#error')
+  .content
+  .querySelector('.error');
 
 const PriceLimit = {
   MIN: {
@@ -15,6 +37,8 @@ const PriceLimit = {
     house: 100000,
     palace: 100000,
   },
+  START: 1000,
+  STEP: 1,
 };
 
 const GuestsCapacity = {
@@ -23,14 +47,6 @@ const GuestsCapacity = {
   '3': ['1', '2', '3'],
   '100': ['0'],
 };
-
-const adForm = document.querySelector('.ad-form');
-const typeInput = adForm.querySelector('#type');
-const priceInput = adForm.querySelector('#price');
-const roomsInput = adForm.querySelector('#room_number');
-const capacityInput = adForm.querySelector('#capacity');
-const timeFieldset = adForm.querySelector('.ad-form__element--time');
-const timeInputs = timeFieldset.querySelectorAll('select');
 
 const FormError = {
   PRICE_VALUE: () => `Укажите цену ${getGenitiveForm(typeInput.value)} от ${PriceLimit.MIN[typeInput.value]} до ${PriceLimit.MAX[typeInput.value]}`,
@@ -44,29 +60,132 @@ const FormError = {
   },
 };
 
-const activateMapFilters = (isOn = true) => {
-  toggleFormElements('map__filters', isOn);
-};
-
-const activateAdFormElements = (isOn = true) => {
-  toggleFormElements('ad-form', isOn);
-};
-
 const validatePrice = (val) =>
   parseInt(val, 10) >= PriceLimit.MIN[typeInput.value]
   && parseInt(val, 10) <= PriceLimit.MAX[typeInput.value];
 
 const validateCapacity = (val) => GuestsCapacity[roomsInput.value].includes(val);
 
-const validateForm = () => {
+const initPriceRangeFilter = () => {
+  const onTypeOptionsChange = () => {
+    priceSlider.noUiSlider.set(priceInput.value);
+  };
+
+  noUiSlider.create(priceSlider, {
+    range: {
+      min: 0,
+      max: Math.max(...Object.values(PriceLimit.MAX)),
+    },
+    start: PriceLimit.START,
+    step: PriceLimit.STEP,
+    connect: 'lower',
+    format: {
+      to: (value) => value.toFixed(0),
+      from: (value) => parseInt(value, 10),
+    },
+  });
+
+  priceSlider.noUiSlider.on('update', () => {
+    priceInput.value = priceSlider.noUiSlider.get();
+  });
+
+  priceInput.addEventListener('change', onTypeOptionsChange);
+  typeInput.addEventListener('change', onTypeOptionsChange);
+};
+
+const resetForm = () => {
+  adForm.reset();
+  resetMap();
+  resetMainPinMarker();
+
+  setTimeout(() => {
+    setDefaultAddress();
+    priceSlider.noUiSlider.set(PriceLimit.START);
+  });
+};
+
+const isEscEvent = (evt) => evt.key === 'Escape' || evt.key === 'Esc';
+
+const showSubmitSuccessMessage = () => {
+  document.body.append(successSubmitMessage);
+
+  document.addEventListener('keydown', onSuccessMessageEscPress);
+  successSubmitMessage.addEventListener('click', onSuccessMessageBodyClick);
+};
+
+const removeSubmitSuccessMessage = () => {
+  successSubmitMessage.remove();
+
+  document.removeEventListener('keydown', onSuccessMessageEscPress);
+  successSubmitMessage.removeEventListener('click', onSuccessMessageBodyClick);
+};
+
+function onSuccessMessageEscPress(evt) {
+  if (isEscEvent(evt)) {
+    evt.preventDefault();
+
+    removeSubmitSuccessMessage();
+  }
+}
+
+function onSuccessMessageBodyClick() {
+  removeSubmitSuccessMessage();
+}
+
+const showSubmitErrorMessage = () => {
+  document.body.append(errorSubmitMessage);
+
+  document.addEventListener('keydown', onErrorMessageEscPress);
+  errorSubmitMessage.addEventListener('click', onErrorMessageBodyClick);
+};
+
+const removeSubmitErrorMessage = () => {
+  errorSubmitMessage.remove();
+
+  document.removeEventListener('keydown', onErrorMessageEscPress);
+  errorSubmitMessage.removeEventListener('click', onErrorMessageBodyClick);
+};
+
+function onErrorMessageEscPress(evt) {
+  if (isEscEvent(evt)) {
+    evt.preventDefault();
+
+    removeSubmitErrorMessage();
+  }
+}
+
+function onErrorMessageBodyClick() {
+  removeSubmitErrorMessage();
+}
+
+const onSuccessSendFormData = () => {
+  submitBtn.disabled = false;
+
+  resetForm();
+  showSubmitSuccessMessage();
+};
+
+const onFailSendFormData = () => {
+  submitBtn.disabled = false;
+
+  showSubmitErrorMessage();
+};
+
+const initFormValidation = () => {
   const pristine = new Pristine(adForm, {
     classTo: 'ad-form__element',
     errorTextParent: 'ad-form__element',
     errorTextClass: 'ad-form__error',
   }, false);
+
   pristine.addValidator(priceInput, validatePrice, FormError.PRICE_VALUE);
   pristine.addValidator(capacityInput, validateCapacity, FormError.CAPACITY_VALUE);
-  const onTypeInputChange = () => {
+
+  const onTitleInputChange = () => {
+    pristine.validate(titleInput);
+  };
+
+  const onTypeOptionsChange = () => {
     priceInput.placeholder = PriceLimit.MIN[typeInput.value];
     if (priceInput.value || priceInput.closest('.has-danger')) {
       pristine.validate(priceInput);
@@ -77,10 +196,10 @@ const validateForm = () => {
     pristine.validate(capacityInput);
   };
 
-  const onTimeInputChange = (evt) => {
-    for (const input of timeInputs) {
-      if (input !== evt.target) {
-        input.value = evt.target.value;
+  const onTimeSelectChange = (evt) => {
+    for (const select of timeSelects) {
+      if (select !== evt.target) {
+        select.value = evt.target.value;
       }
     }
   };
@@ -89,8 +208,10 @@ const validateForm = () => {
     evt.preventDefault();
 
     const isValid = pristine.validate();
+
     if (isValid) {
       submitBtn.disabled = true;
+
       sendData(
         onSuccessSendFormData,
         onFailSendFormData,
@@ -99,25 +220,24 @@ const validateForm = () => {
     }
   };
 
-  const onAdFormReset = (evt) => {
-    evt.preventDefault();
-
+  const onAdFormReset = () => {
     resetForm();
     pristine.reset();
   };
 
-  typeInput.addEventListener('change', onTypeInputChange);
+  titleInput.addEventListener('change', onTitleInputChange);
+  typeInput.addEventListener('change', onTypeOptionsChange);
+  priceInput.addEventListener('change', onTypeOptionsChange);
   roomsInput.addEventListener('change', onRoomOptionsChange);
   capacityInput.addEventListener('change', onRoomOptionsChange);
-  timeFieldset.addEventListener('change', onTimeInputChange);
+  timeSelectsGroup.addEventListener('change', onTimeSelectChange);
   adForm.addEventListener('submit', onAdFormSubmit);
+  resetBtn.addEventListener('click', onAdFormReset);
 };
 
 const initForm = () => {
-  activateMapFilters(false);
-  activateAdFormElements(false);
-  setTimeout(activateAdFormElements, 1000, true);
-  validateForm();
+  initPriceRangeFilter();
+  initFormValidation();
 };
 
 export { initForm };
