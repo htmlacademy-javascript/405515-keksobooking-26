@@ -22,7 +22,7 @@ const errorSubmitMessage = document.querySelector('#error')
   .content
   .querySelector('.error');
 
-const PriceLimit = {
+const priceLimit = {
   MIN: {
     bungalow: 0,
     flat: 1000,
@@ -49,7 +49,7 @@ const GuestsCapacity = {
 };
 
 const FormError = {
-  PRICE_VALUE: () => `Укажите цену ${getGenitiveForm(typeInput.value)} от ${PriceLimit.MIN[typeInput.value]} до ${PriceLimit.MAX[typeInput.value]}`,
+  PRICE_VALUE: () => `Укажите цену ${getGenitiveForm(typeInput.value)} от ${priceLimit.MIN[typeInput.value]} до ${priceLimit.MAX[typeInput.value]}`,
   CAPACITY_VALUE: () => {
     if (roomsInput.value === '100') {
       return 'Это жилье предназначено не для гостей';
@@ -61,8 +61,8 @@ const FormError = {
 };
 
 const validatePrice = (val) =>
-  parseInt(val, 10) >= PriceLimit.MIN[typeInput.value]
-  && parseInt(val, 10) <= PriceLimit.MAX[typeInput.value];
+  parseInt(val, 10) >= priceLimit.MIN[typeInput.value]
+  && parseInt(val, 10) <= priceLimit.MAX[typeInput.value];
 
 const validateCapacity = (val) => GuestsCapacity[roomsInput.value].includes(val);
 
@@ -74,10 +74,10 @@ const initPriceRangeFilter = () => {
   noUiSlider.create(priceSlider, {
     range: {
       min: 0,
-      max: Math.max(...Object.values(PriceLimit.MAX)),
+      max: Math.max(...Object.values(priceLimit.MAX)),
     },
-    start: PriceLimit.START,
-    step: PriceLimit.STEP,
+    start: priceLimit.START,
+    step: priceLimit.STEP,
     connect: 'lower',
     format: {
       to: (value) => value.toFixed(0),
@@ -100,7 +100,7 @@ const resetForm = () => {
 
   setTimeout(() => {
     setDefaultAddress();
-    priceSlider.noUiSlider.set(PriceLimit.START);
+    priceSlider.noUiSlider.set(priceLimit.START);
   });
 };
 
@@ -186,7 +186,7 @@ const initFormValidation = () => {
   };
 
   const onTypeOptionsChange = () => {
-    priceInput.placeholder = PriceLimit.MIN[typeInput.value];
+    priceInput.placeholder = priceLimit.MIN[typeInput.value];
     if (priceInput.value || priceInput.closest('.has-danger')) {
       pristine.validate(priceInput);
     }
